@@ -30,7 +30,7 @@ Iterates the individual JSON results that are contained in the WARC.
     optional arguments:
       -h, --help           show this help message and exit
       --services SERVICES  A comma separated list of services to limit the results
-                           to. Services are: twitter, tumblr, flickr, other.
+                           to. Services are: twitter_rest, twitter_stream, tumblr, flickr, other.
       --entities ENTITIES  A comma separated list of entities to limit the results
                            to. Entities are: tweet, tumblr_blog, tumblr_post,
                            flickr_photo, flickr_person.

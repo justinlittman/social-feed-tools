@@ -77,7 +77,7 @@ def parse_twitter_url(url):
 api_func_dict = {
     utils.is_tumblr_url: parse_tumblr_url,
     utils.is_flickr_url: parse_flickr_url,
-    utils.is_twitter_url: parse_twitter_url
+    utils.is_twitter_rest_url: parse_twitter_url
 }
 
 

@@ -1,39 +1,53 @@
-import warc
+import socialfeedtools.warc as warc
 import json
 import argparse
 import socialfeedtools.utils as utils
 import logging
+from urllib3.exceptions import ProtocolError
 
 log = logging.getLogger(__name__)
 
 
 def tumblr_response_iter(record):
-    json_obj = utils.extract_json_from_payload(record)
+    json_obj = json.load(record.http_response)
     yield "tumblr_blog", json_obj["response"]["blog"]
     for post in json_obj["response"]["posts"]:
         yield "tumblr_post", post
 
 
 def flickr_response_iter(record):
-    json_obj = utils.extract_json_from_payload(record)
+    json_obj = json.load(record.http_response)
     if "photo" in json_obj:
         yield "flickr_photo", json_obj["photo"]
     elif "person" in json_obj:
         yield "flickr_person", json_obj["person"]
 
 
-def twitter_response_iter(record):
-    json_obj = utils.extract_json_from_payload(record)
-    if json_obj:
-        for tweet in json_obj:
-            yield "tweet", tweet
+def twitter_rest_response_iter(record):
+    json_obj = json.load(record.http_response)
+    for tweet in json_obj["statuses"]:
+        yield "tweet", tweet
 
+
+def twitter_stream_response_iter(record):
+    try:
+        for tweet in utils.iter_lines(record.http_response):
+            try:
+                yield "tweet", json.loads(tweet)
+            except ValueError:
+                #Bad tweet
+                pass
+    except ProtocolError:
+        #Last chunk incomplete
+        pass
 
 to_service_dict = {
     utils.is_tumblr_url: "tumblr",
     utils.is_flickr_url: "flickr",
-    utils.is_twitter_url: "twitter"
+    utils.is_twitter_rest_url: "twitter_rest",
+    utils.is_twitter_stream_url: "twitter_stream"
 }
+
 
 def get_service(record):
     url = record.header["WARC-Target-URI"]
@@ -46,24 +60,24 @@ def get_service(record):
 service_to_iter_func_dict = {
     "tumblr": tumblr_response_iter,
     "flickr": flickr_response_iter,
-    "twitter": twitter_response_iter
+    "twitter_rest": twitter_rest_response_iter,
+    "twitter_stream": twitter_stream_response_iter
 
 }
 
 
 def iter_warc(filepath, services=(), entities=(), pretty=False):
     log.info("File %s", filepath)
-    f = warc.open(filepath)
+    f = warc.WARCResponseFile(filepath)
     try:
-        for record in f:
-            if record.type == 'response':
-                #Determine the service
-                service = get_service(record)
-                #Iterate over the iter for the service
-                if service and (not services or service in services):
-                    for entity_type, entity_obj in service_to_iter_func_dict[service](record):
-                        if not entities or entity_type in entities:
-                            print json.dumps(entity_obj, indent=4 if pretty else None)
+        for count, record in enumerate(f):
+            #Determine the service
+            service = get_service(record)
+            #Iterate over the iter for the service
+            if service and (not services or service in services):
+                for entity_type, entity_obj in service_to_iter_func_dict[service](record):
+                    if not entities or entity_type in entities:
+                        print json.dumps(entity_obj, indent=4 if pretty else None)
 
     finally:
         f.close()

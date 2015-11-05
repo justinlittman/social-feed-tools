@@ -1,8 +1,3 @@
-import json
-import logging
-
-log = logging.getLogger(__name__)
-
 def is_tumblr_url(url):
     return url.startswith("http://api.tumblr.com/v2")
 
@@ -11,32 +6,37 @@ def is_flickr_url(url):
     return url.startswith("https://api.flickr.com/services/rest/")
 
 
-def is_twitter_url(url):
+def is_twitter_rest_url(url):
     return url.startswith("https://api.twitter.com/1.1")
 
 
-def extract_json_from_payload(record):
-    """
-    Extract json from a warc response record.
+def is_twitter_stream_url(url):
+    return url.startswith("https://stream.twitter.com/1.1")
 
-    Assumes that json is a single line that appears after the http headers.
-    :param record:  the warc response record.
-    :return: a json object or None
-    """
-    next_line = False
-    first_line = True
-    for l in record.payload:
-        if first_line:
-            if not l.startswith("HTTP/1.1 200 OK"):
-                return None
-            first_line = False
-        if next_line:
-            try:
-                return json.loads(l)
-            except:
-                log.warning("Error parsing json in record %s (%s)", record.header.record_id, record.url)
-                return None
-        if l == "\r\n":
-            next_line = True
 
-    return None
+def iter_lines(http_response):
+    """
+    Iterates over the response data, one line at a time.
+
+    Borrowed from https://github.com/kennethreitz/requests/blob/master/requests/models.py.
+    """
+
+    pending = None
+
+    for chunk in http_response.stream(decode_content=True):
+
+        if pending is not None:
+            chunk = pending + chunk
+
+        lines = chunk.splitlines()
+
+        if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
+            pending = lines.pop()
+        else:
+            pending = None
+
+        for line in lines:
+            yield line
+
+    if pending is not None:
+        yield pending
